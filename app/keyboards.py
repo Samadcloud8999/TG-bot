@@ -63,3 +63,16 @@ def help_menu_kb() -> InlineKeyboardMarkup:
     kb.button(text="⬅️ Назад", callback_data="help:back")
     kb.adjust(1)
     return kb.as_markup()
+
+    # меню уровней ассистента
+def assistant_levels_kb():
+    kb = InlineKeyboardBuilder()
+
+    kb.button(text="🟢 Легкий", callback_data="assist:easy")
+    kb.button(text="🟡 Средний", callback_data="assist:medium")
+    kb.button(text="🔴 Сложный", callback_data="assist:hard")
+
+    kb.button(text="⬅️ Назад", callback_data="assist:back")
+
+    kb.adjust(1)
+    return kb.as_markup()   
