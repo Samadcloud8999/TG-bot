@@ -108,11 +108,37 @@ async def create_tables():
         UNIQUE (tg_id, code),
         FOREIGN KEY (tg_id) REFERENCES users(tg_id)
     );
-
     -- Чтобы не спамить напоминаниями каждую минуту
     CREATE TABLE IF NOT EXISTS review_notifications (
         review_id INTEGER PRIMARY KEY,
         last_sent TEXT
     );
+    """)
+    await db.commit()
+
+    # --- Доп. таблицы: folders и материалы внутри папки ---
+    await db.execute("""
+    CREATE TABLE IF NOT EXISTS folders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tg_id INTEGER NOT NULL,
+        subject_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY(subject_id) REFERENCES subjects(id)
+    )
+    """)
+    await db.commit()
+
+    await db.execute("""
+    CREATE TABLE IF NOT EXISTS folder_materials (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tg_id INTEGER NOT NULL,
+        folder_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT,
+        file_id TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY(folder_id) REFERENCES folders(id)
+    )
     """)
     await db.commit()

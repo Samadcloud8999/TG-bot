@@ -1,155 +1,106 @@
+# app/handlers/materials.py
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
-from datetime import datetime
-from .. import db
-from ..keyboards import subject_menu_kb
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.context import FSMContext
+
+from ..db import db
+from ..keyboards import folder_menu_kb
 
 router = Router()
 
-WAIT_MATERIAL = {}      # tg_id -> subject
-WAIT_SEARCH = {}        # tg_id -> subject
+class MaterialStates(StatesGroup):
+    waiting_topic_title = State()
+    waiting_photo = State()
 
-@router.callback_query(F.data.startswith("subadd:"))
-async def sub_add(cb: CallbackQuery):
-    subject = cb.data.split("subadd:", 1)[1]
-    WAIT_MATERIAL[cb.from_user.id] = subject
-    await cb.message.answer(
-        f"➕ Добавление материала в предмет **{subject}**\n"
-        "Отправь:\n"
-        "• текст (сообщение)\n"
-        "• фото\n"
-        "• PDF (файл)\n\n"
-        "Если это текст — просто напиши его.",
-        parse_mode="Markdown"
+@router.callback_query(F.data.startswith("fold:open:"))
+async def open_folder(call: CallbackQuery):
+    folder_id = int(call.data.split(":")[-1])
+
+    cur = await db.execute("SELECT title, created_at FROM folders WHERE id=?", (folder_id,))
+    folder = await cur.fetchone()
+    if not folder:
+        await call.message.answer("Папка не найдена 😕")
+        await call.answer()
+        return
+
+    await call.message.answer(
+        f"📁 Папка: {folder['title']}\n🕒 Создана: {folder['created_at']}",
+        reply_markup=folder_menu_kb(folder_id)
     )
-    await cb.answer()
+    await call.answer()
 
-@router.message(lambda m: WAIT_MATERIAL.get(m.from_user.id) is not None)
-async def material_receive(msg: Message):
-    subject = WAIT_MATERIAL.pop(msg.from_user.id, None)
-    if not subject:
-        return
+@router.callback_query(F.data.startswith("fm:topic:"))
+async def add_topic_start(call: CallbackQuery, state: FSMContext):
+    folder_id = int(call.data.split(":")[-1])
+    await state.update_data(folder_id=folder_id)
+    await state.set_state(MaterialStates.waiting_topic_title)
+    await call.message.answer("Напиши название темы (например: 'Законы Ньютона'):")
+    await call.answer()
 
-    kind = "text"
-    file_id = None
-    text = ""
+@router.message(MaterialStates.waiting_topic_title)
+async def add_topic_save(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    folder_id = int(data["folder_id"])
+    title = msg.text.strip()
 
-    if msg.photo:
-        kind = "photo"
-        file_id = msg.photo[-1].file_id
-        text = msg.caption or ""
-    elif msg.document:
-        # pdf или любой документ (для MVP принимаем, но можно ограничить mime_type)
-        kind = "pdf"
-        file_id = msg.document.file_id
-        text = msg.caption or ""
-    else:
-        kind = "text"
-        text = msg.text or ""
+    await db.execute(
+        "INSERT INTO materials(tg_id, folder_id, kind, title) VALUES(?,?,?,?)",
+        (msg.from_user.id, folder_id, "topic", title)
+    )
+    await db.commit()
+    await state.clear()
+    await msg.answer(f"✅ Тема сохранена: {title}")
 
-    await db.db.execute("""
-        INSERT INTO materials(tg_id, subject, kind, file_id, text, tags, created_at)
-        VALUES(?, ?, ?, ?, ?, ?, ?)
-    """, (msg.from_user.id, subject, kind, file_id, text, "", datetime.utcnow().isoformat()))
-    await db.db.commit()
+@router.callback_query(F.data.startswith("fm:photo:"))
+async def add_photo_start(call: CallbackQuery, state: FSMContext):
+    folder_id = int(call.data.split(":")[-1])
+    await state.update_data(folder_id=folder_id)
+    await state.set_state(MaterialStates.waiting_photo)
+    await call.message.answer("Отправь фото (я сохраню в эту папку).")
+    await call.answer()
 
-    await msg.answer(f"✅ Материал сохранён в **{subject}**", parse_mode="Markdown")
+@router.message(MaterialStates.waiting_photo, F.photo)
+async def add_photo_save(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    folder_id = int(data["folder_id"])
 
-@router.callback_query(F.data.startswith("sublist:"))
-async def sub_list(cb: CallbackQuery):
-    subject = cb.data.split("sublist:", 1)[1]
+    # берём самое большое фото
+    file_id = msg.photo[-1].file_id
 
-    cur = await db.db.execute("""
-        SELECT id, kind, text, created_at
-        FROM materials
-        WHERE tg_id=? AND subject=?
-        ORDER BY created_at DESC
-        LIMIT 10
-    """, (cb.from_user.id, subject))
+    await db.execute(
+        "INSERT INTO materials(tg_id, folder_id, kind, file_id) VALUES(?,?,?,?)",
+        (msg.from_user.id, folder_id, "photo", file_id)
+    )
+    await db.commit()
+    await state.clear()
+    await msg.answer("✅ Фото сохранено в папку!")
+
+@router.message(MaterialStates.waiting_photo)
+async def add_photo_wrong(msg: Message):
+    await msg.answer("Нужно отправить именно ФОТО 📸")
+
+@router.callback_query(F.data.startswith("fm:view:"))
+async def view_folder(call: CallbackQuery):
+    folder_id = int(call.data.split(":")[-1])
+    tg_id = call.from_user.id
+
+    cur = await db.execute(
+        "SELECT kind, title, file_id, created_at FROM materials WHERE tg_id=? AND folder_id=? ORDER BY id DESC",
+        (tg_id, folder_id)
+    )
     rows = await cur.fetchall()
 
     if not rows:
-        await cb.message.answer("Пока материалов нет. Нажми ➕ Добавить материал.")
-        await cb.answer()
+        await call.message.answer("В папке пока пусто.")
+        await call.answer()
         return
 
-    msg_text = f"📂 Материалы по предмету **{subject}** (последние 10)\n\n"
-    for mid, kind, text, created_at in rows:
-        preview = (text or "").strip()
-        if len(preview) > 30:
-            preview = preview[:30] + "..."
-        msg_text += f"ID {mid} • {kind} • {preview}\n"
+    await call.message.answer("📄 Содержимое папки:")
+    for r in rows[:20]:
+        if r["kind"] == "topic":
+            await call.message.answer(f"📝 Тема: {r['title']}\n🕒 {r['created_at']}")
+        else:
+            await call.message.answer_photo(r["file_id"], caption=f"📸 Фото\n🕒 {r['created_at']}")
 
-    msg_text += "\nЧтобы открыть материал:\n/open ID"
-    await cb.message.answer(msg_text, parse_mode="Markdown")
-    await cb.answer()
-
-@router.message(F.text.startswith("/open"))
-async def open_material(msg: Message):
-    parts = msg.text.split(maxsplit=1)
-    if len(parts) < 2:
-        await msg.answer("Формат: /open ID")
-        return
-    try:
-        mid = int(parts[1])
-    except ValueError:
-        await msg.answer("ID должен быть числом.")
-        return
-
-    cur = await db.db.execute("""
-        SELECT subject, kind, file_id, text, created_at
-        FROM materials
-        WHERE id=? AND tg_id=?
-    """, (mid, msg.from_user.id))
-    row = await cur.fetchone()
-    if not row:
-        await msg.answer("Материал не найден.")
-        return
-
-    subject, kind, file_id, text, created_at = row
-    header = f"📌 **{subject}**\nТип: {kind}\nДата: {created_at}\n\n"
-    caption = (header + (text or "")).strip()
-
-    if kind == "photo" and file_id:
-        await msg.answer_photo(file_id, caption=caption[:1024], parse_mode="Markdown")
-    elif kind == "pdf" and file_id:
-        await msg.answer_document(file_id, caption=caption[:1024], parse_mode="Markdown")
-    else:
-        await msg.answer(caption, parse_mode="Markdown")
-
-@router.callback_query(F.data.startswith("subsearch:"))
-async def sub_search(cb: CallbackQuery):
-    subject = cb.data.split("subsearch:", 1)[1]
-    WAIT_SEARCH[cb.from_user.id] = subject
-    await cb.message.answer(f"🔎 Поиск по **{subject}**: напиши ключевое слово или дату (например 2026-02-27)", parse_mode="Markdown")
-    await cb.answer()
-
-@router.message(lambda m: WAIT_SEARCH.get(m.from_user.id) is not None)
-async def do_search(msg: Message):
-    subject = WAIT_SEARCH.pop(msg.from_user.id, None)
-    q = (msg.text or "").strip()
-    if not q:
-        return
-
-    like = f"%{q}%"
-    cur = await db.db.execute("""
-        SELECT id, kind, text, created_at
-        FROM materials
-        WHERE tg_id=? AND subject=? AND (text LIKE ? OR created_at LIKE ?)
-        ORDER BY created_at DESC
-        LIMIT 10
-    """, (msg.from_user.id, subject, like, like))
-    rows = await cur.fetchall()
-
-    if not rows:
-        await msg.answer("Ничего не найдено.")
-        return
-
-    out = f"🔎 Результаты по **{subject}**:\n\n"
-    for mid, kind, text, created_at in rows:
-        preview = (text or "").strip()
-        if len(preview) > 30:
-            preview = preview[:30] + "..."
-        out += f"ID {mid} • {kind} • {preview}\n"
-    out += "\nОткрыть: /open ID"
-    await msg.answer(out, parse_mode="Markdown")
+    await call.answer()
