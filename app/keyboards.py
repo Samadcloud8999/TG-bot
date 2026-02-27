@@ -15,6 +15,7 @@ def main_kb():
     )
 
 
+# ---------- SUBJECTS ----------
 def subjects_kb(subjects: list[str]) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for name in subjects:
@@ -55,7 +56,7 @@ def folder_menu_kb(folder_id: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-# ✅ ДОБАВЛЕНО: меню "Помощь друга" (чтобы не падал Render)
+# ---------- HELP FRIEND ----------
 def help_menu_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="➕ Создать запрос", callback_data="help:new")
@@ -64,15 +65,14 @@ def help_menu_kb() -> InlineKeyboardMarkup:
     kb.adjust(1)
     return kb.as_markup()
 
-    # меню уровней ассистента
-def assistant_levels_kb():
+
+# ---------- ASSISTANT ----------
+# Важно: в логах у тебя ждут ИМЕННО assistant_levels_kb
+def assistant_levels_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-
-    kb.button(text="🟢 Легкий", callback_data="assist:easy")
-    kb.button(text="🟡 Средний", callback_data="assist:medium")
-    kb.button(text="🔴 Сложный", callback_data="assist:hard")
-
+    kb.button(text="1️⃣ Как ребёнку", callback_data="assist:level:1")
+    kb.button(text="2️⃣ Обычное", callback_data="assist:level:2")
+    kb.button(text="3️⃣ Академ.", callback_data="assist:level:3")
     kb.button(text="⬅️ Назад", callback_data="assist:back")
-
     kb.adjust(1)
-    return kb.as_markup()   
+    return kb.as_markup()
