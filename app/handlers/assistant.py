@@ -1,75 +1,169 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
-from ..keyboards import assistant_levels_kb
-from ..config import OPENAI_API_KEY
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
+
+from ..keyboards import assistant_levels_kb  # твоя клавиатура уровней
 
 router = Router()
 
-WAIT_AI_TOPIC = {}
-AI_TOPIC_TEXT = {}
 
-def fallback_explain(topic: str, level: str) -> str:
-    # level: l1/l2/l3
+# ---------- FSM ----------
+class AssistantFlow(StatesGroup):
+    topic = State()
+    level = State()
+
+
+# ---------- Keyboards ----------
+def assistant_nav_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🆕 Новый вопрос", callback_data="ai:new")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="ai:back")],
+        [InlineKeyboardButton(text="✖️ Отмена", callback_data="ai:cancel")],
+    ])
+
+def cancel_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✖️ Отмена", callback_data="ai:cancel")]
+    ])
+
+def after_answer_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔁 Сменить уровень", callback_data="ai:change_level")],
+        [InlineKeyboardButton(text="🆕 Новый вопрос", callback_data="ai:new")],
+    ])
+
+
+# ---------- Text builder ----------
+def explain_template(topic: str, level: str) -> str:
+    topic = topic.strip()
+
     if level == "l1":
         return (
-            f"1️⃣ Объяснение как ребёнку:\n"
-            f"Представь, что **{topic}** — это простое правило.\n"
-            f"Смысл: понять *что это*, *зачем нужно*, и *увидеть пример*.\n\n"
-            "✅ План:\n"
-            "1) Дай определение 1 предложением\n"
-            "2) Приведи 1 простой пример\n"
-            "3) Повтори своими словами\n"
+            f"🧠 <b>Объяснение “как ребёнку”</b>\n"
+            f"📌 <b>Тема:</b> {topic}\n\n"
+            f"✅ <b>Что это?</b>\n"
+            f"Представь, что <b>{topic}</b> — это простое правило.\n\n"
+            f"🔎 <b>Зачем нужно?</b>\n"
+            f"Чтобы быстро понимать и решать похожие задачи.\n\n"
+            f"🧩 <b>Пример:</b>\n"
+            f"Придумай 1 простой пример и объясни его в 1–2 предложениях.\n\n"
+            f"🧪 <b>Проверка:</b>\n"
+            f"1) Скажи определение одним предложением\n"
+            f"2) Приведи пример\n"
+            f"3) Объясни своими словами"
         )
+
     if level == "l3":
         return (
-            f"3️⃣ Академическое объяснение:\n"
-            f"Тема: **{topic}**\n\n"
-            "📌 Структура:\n"
-            "• определения и формальные свойства\n"
-            "• условия применимости\n"
-            "• типовые задачи и ошибки\n\n"
-            "🧪 Самопроверка:\n"
-            "1) Сформулируй ключевое определение\n"
-            "2) Приведи контрпример/ограничение\n"
-            "3) Реши задачу и объясни ход\n"
+            f"🎓 <b>Академическое объяснение</b>\n"
+            f"📌 <b>Тема:</b> {topic}\n\n"
+            f"1) <b>Определение</b> (строго)\n"
+            f"2) <b>Свойства</b> и следствия\n"
+            f"3) <b>Условия применимости</b>\n"
+            f"4) <b>Типовые ошибки</b>\n\n"
+            f"🧪 <b>Самопроверка:</b>\n"
+            f"• Сформулируй определение\n"
+            f"• Приведи контрпример/ограничение\n"
+            f"• Реши задачу и объясни ход"
         )
+
+    # l2 по умолчанию
     return (
-        f"2️⃣ Обычное объяснение:\n"
-        f"Тема: **{topic}**\n\n"
-        "✅ Быстро понять:\n"
-        "1) Что это (1–2 предложения)\n"
-        "2) Где применяется\n"
-        "3) 2 примера (лёгкий и средний)\n\n"
-        "📝 Вопросы:\n"
-        "• Что будет если изменить условие?\n"
-        "• Какая самая частая ошибка?\n"
+        f"✨ <b>Обычное объяснение</b>\n"
+        f"📌 <b>Тема:</b> {topic}\n\n"
+        f"✅ <b>Быстро понять:</b>\n"
+        f"1) Что это (1–2 предложения)\n"
+        f"2) Где применяется\n"
+        f"3) 2 примера: лёгкий + средний\n\n"
+        f"⚠️ <b>Частые ошибки:</b>\n"
+        f"• Путают определение/условия\n"
+        f"• Неправильно подставляют значения\n\n"
+        f"🧪 <b>Мини-тест:</b>\n"
+        f"1) Как объяснишь это в 1 фразе?\n"
+        f"2) Где это используется?\n"
+        f"3) Что будет, если поменять условие?"
     )
 
-@router.message(F.text == "🤖 Ассистент")
-async def assistant_start(msg: Message):
-    WAIT_AI_TOPIC[msg.from_user.id] = True
-    await msg.answer("Напиши тему/вопрос, который нужно объяснить:")
 
-@router.message(lambda m: WAIT_AI_TOPIC.get(m.from_user.id, False))
-async def assistant_got_topic(msg: Message):
-    WAIT_AI_TOPIC.pop(msg.from_user.id, None)
-    AI_TOPIC_TEXT[msg.from_user.id] = msg.text.strip()
-    await msg.answer("Выбери уровень объяснения:", reply_markup=assistant_levels_kb())
+# ---------- Handlers ----------
+@router.message(F.text == "🤖 Ассистент")
+async def assistant_start(msg: Message, state: FSMContext):
+    await state.clear()
+    await state.set_state(AssistantFlow.topic)
+    await msg.answer(
+        "🤖 <b>Ассистент</b>\n\n"
+        "Напиши тему/вопрос, который нужно объяснить.\n"
+        "Пример: <i>“Что такое производная?”</i>",
+        parse_mode="HTML",
+        reply_markup=cancel_kb()
+    )
+
+
+@router.message(AssistantFlow.topic)
+async def assistant_got_topic(msg: Message, state: FSMContext):
+    topic = (msg.text or "").strip()
+    if len(topic) < 3:
+        await msg.answer("Тема слишком короткая. Напиши чуть подробнее 🙂", reply_markup=cancel_kb())
+        return
+
+    await state.update_data(topic=topic)
+    await state.set_state(AssistantFlow.level)
+    await msg.answer(
+        "Выбери уровень объяснения:",
+        reply_markup=assistant_levels_kb()
+    )
+
 
 @router.callback_query(F.data.startswith("ai:"))
-async def assistant_level(cb: CallbackQuery):
-    tg_id = cb.from_user.id
-    level = cb.data.split("ai:", 1)[1]  # l1/l2/l3
-    topic = AI_TOPIC_TEXT.pop(tg_id, "").strip()
+async def assistant_level(cb: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    topic = (data.get("topic") or "").strip()
+
+    action = cb.data.split("ai:", 1)[1]
+
+    # навигация
+    if action == "cancel":
+        await state.clear()
+        await cb.message.answer("Ок, отменил ✅")
+        await cb.answer()
+        return
+
+    if action == "new":
+        await state.clear()
+        await state.set_state(AssistantFlow.topic)
+        await cb.message.answer("Напиши новую тему/вопрос:", reply_markup=cancel_kb())
+        await cb.answer()
+        return
+
+    if action == "back":
+        await state.clear()
+        await cb.message.answer("Вернулся назад ✅")
+        await cb.answer()
+        return
+
+    if action == "change_level":
+        if not topic:
+            await state.set_state(AssistantFlow.topic)
+            await cb.message.answer("Сначала напиши тему:", reply_markup=cancel_kb())
+        else:
+            await state.set_state(AssistantFlow.level)
+            await cb.message.answer("Ок, выбери новый уровень:", reply_markup=assistant_levels_kb())
+        await cb.answer()
+        return
+
+    # это уровень l1/l2/l3
+    if action not in ("l1", "l2", "l3"):
+        await cb.answer()
+        return
 
     if not topic:
+        await state.clear()
         await cb.message.answer("Сначала нажми 🤖 Ассистент и напиши тему.")
         await cb.answer()
         return
 
-    # место под внешний API (опционально). Сейчас fallback.
-    # Чтобы не ломать MVP — всегда работаем без API.
-    text = fallback_explain(topic, level)
+    text = explain_template(topic, action)
 
-    await cb.message.answer(text, parse_mode="Markdown")
+    await cb.message.answer(text, parse_mode="HTML", reply_markup=after_answer_kb())
     await cb.answer()
