@@ -49,8 +49,16 @@ async def add_topic_save(msg: Message, state: FSMContext):
         (msg.from_user.id, folder_id, "topic", title)
     )
     await db.commit()
+
+    # получаем инфо о папке
+    cur = await db.execute("SELECT title FROM folders WHERE id=?", (folder_id,))
+    folder = await cur.fetchone()
+    
     await state.clear()
-    await msg.answer(f"✅ Тема сохранена: {title}")
+    await msg.answer(
+        f"✅ Тема сохранена: {title}\n\n📁 Папка: {folder['title'] if folder else 'Неизв.'}\nЧто дальше?",
+        reply_markup=folder_menu_kb(folder_id)
+    )
 
 @router.callback_query(F.data.startswith("fm:photo:"))
 async def add_photo_start(call: CallbackQuery, state: FSMContext):
@@ -73,12 +81,37 @@ async def add_photo_save(msg: Message, state: FSMContext):
         (msg.from_user.id, folder_id, "photo", file_id)
     )
     await db.commit()
+
+    # получаем инфо о папке
+    cur = await db.execute("SELECT title FROM folders WHERE id=?", (folder_id,))
+    folder = await cur.fetchone()
+
     await state.clear()
-    await msg.answer("✅ Фото сохранено в папку!")
+    await msg.answer(
+        f"✅ Фото сохранено в папку!\n\n📁 Папка: {folder['title'] if folder else 'Неизв.'}\nЧто дальше?",
+        reply_markup=folder_menu_kb(folder_id)
+    )
 
 @router.message(MaterialStates.waiting_photo)
 async def add_photo_wrong(msg: Message):
     await msg.answer("Нужно отправить именно ФОТО 📸")
+
+@router.callback_query(F.data.startswith("fm:back:"))
+async def back_to_folder_menu(call: CallbackQuery):
+    folder_id = int(call.data.split(":")[-1])
+    
+    cur = await db.execute("SELECT title, created_at FROM folders WHERE id=?", (folder_id,))
+    folder = await cur.fetchone()
+    if not folder:
+        await call.message.answer("Папка не найдена 😕")
+        await call.answer()
+        return
+
+    await call.message.answer(
+        f"📁 Папка: {folder['title']}\n🕒 Создана: {folder['created_at']}\n\nЧто делаем?",
+        reply_markup=folder_menu_kb(folder_id)
+    )
+    await call.answer()
 
 @router.callback_query(F.data.startswith("fm:view:"))
 async def view_folder(call: CallbackQuery):

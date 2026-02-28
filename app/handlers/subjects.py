@@ -28,6 +28,11 @@ async def subjects_back(call: CallbackQuery):
     await call.message.answer("Главное меню ✅", reply_markup=main_kb())
     await call.answer()
 
+@router.callback_query(F.data == "sf:back")
+async def subject_back(call: CallbackQuery):
+    await call.message.answer("Выбери предмет:", reply_markup=subjects_kb(SUBJECTS))
+    await call.answer()
+
 @router.callback_query(F.data.startswith("sub:"))
 async def choose_subject(call: CallbackQuery):
     tg_id = call.from_user.id
@@ -95,6 +100,16 @@ async def folder_list(call: CallbackQuery):
 
 @router.callback_query(F.data.startswith("sf:listback:"))
 async def back_to_subject_menu(call: CallbackQuery):
-    # просто закрываем список
-    await call.message.answer("Ок ✅")
+    subject_id = int(call.data.split(":")[-1])
+    # получим название предмета из БД
+    cur = await db.execute("SELECT name FROM subjects WHERE id=?", (subject_id,))
+    row = await cur.fetchone()
+    if row:
+        name = row["name"]
+        await call.message.answer(
+            f"📌 Предмет: {name}\nЧто делаем?",
+            reply_markup=subject_menu_kb(subject_id)
+        )
+    else:
+        await call.message.answer("Предмет не найден.")
     await call.answer()

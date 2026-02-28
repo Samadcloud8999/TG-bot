@@ -15,6 +15,12 @@ WAIT_HELP_RESP = {}  # responder -> request_id
 async def help_menu(msg: Message):
     await msg.answer("🤝 Помощь друга\nВыбери:", reply_markup=help_menu_kb())
 
+@router.callback_query(F.data == "help:back")
+async def help_back(cb: CallbackQuery):
+    from ..keyboards import main_kb
+    await cb.message.answer("Главное меню ✅", reply_markup=main_kb())
+    await cb.answer()
+
 @router.callback_query(F.data == "help:new")
 async def help_new(cb: CallbackQuery):
     WAIT_HELP_TOPIC[cb.from_user.id] = True
