@@ -116,6 +116,19 @@ async def create_tables():
     """)
     await db.commit()
 
+    # --- Таблица предметов ---
+    await db.execute("""
+    CREATE TABLE IF NOT EXISTS subjects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tg_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(tg_id, name),
+        FOREIGN KEY(tg_id) REFERENCES users(tg_id)
+    )
+    """)
+    await db.commit()
+
     # --- Доп. таблицы: folders и материалы внутри папки ---
     await db.execute("""
     CREATE TABLE IF NOT EXISTS folders (

@@ -45,7 +45,7 @@ async def add_topic_save(msg: Message, state: FSMContext):
     title = msg.text.strip()
 
     await db.execute(
-        "INSERT INTO materials(tg_id, folder_id, kind, title) VALUES(?,?,?,?)",
+        "INSERT INTO folder_materials(tg_id, folder_id, kind, title) VALUES(?,?,?,?)",
         (msg.from_user.id, folder_id, "topic", title)
     )
     await db.commit()
@@ -77,7 +77,7 @@ async def add_photo_save(msg: Message, state: FSMContext):
     file_id = msg.photo[-1].file_id
 
     await db.execute(
-        "INSERT INTO materials(tg_id, folder_id, kind, file_id) VALUES(?,?,?,?)",
+        "INSERT INTO folder_materials(tg_id, folder_id, kind, file_id) VALUES(?,?,?,?)",
         (msg.from_user.id, folder_id, "photo", file_id)
     )
     await db.commit()
@@ -119,7 +119,7 @@ async def view_folder(call: CallbackQuery):
     tg_id = call.from_user.id
 
     cur = await db.execute(
-        "SELECT kind, title, file_id, created_at FROM materials WHERE tg_id=? AND folder_id=? ORDER BY id DESC",
+        "SELECT kind, title, file_id, created_at FROM folder_materials WHERE tg_id=? AND folder_id=? ORDER BY id DESC",
         (tg_id, folder_id)
     )
     rows = await cur.fetchall()
