@@ -49,7 +49,6 @@ async def _send_due_review_reminders(bot):
             continue
 
 async def _auto_ai_help_after_1h(bot):
-    # если запрос открыт > 1 часа и никто не ответил, отправляем авто-помощь
     threshold = (datetime.utcnow() - timedelta(hours=1)).isoformat()
 
     cur = await db.db.execute("""
@@ -64,7 +63,6 @@ async def _auto_ai_help_after_1h(bot):
     rows = await cur.fetchall()
 
     for req_id, tg_id, subject, topic, description in rows:
-        # Заглушка-ассистент (работает без внешнего API)
         text = (
             "🤖 Никто не успел ответить за 1 час, поэтому помогу я.\n\n"
             f"📌 Тема: {topic}\n"
@@ -86,12 +84,10 @@ async def _auto_ai_help_after_1h(bot):
             continue
 
 async def start(bot):
-    # основной цикл планировщика
     while True:
         try:
             await _send_due_review_reminders(bot)
             await _auto_ai_help_after_1h(bot)
         except Exception:
-            # не падаем
             pass
         await asyncio.sleep(CHECK_EVERY_SECONDS)

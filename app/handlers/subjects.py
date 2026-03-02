@@ -1,4 +1,3 @@
-# app/handlers/subjects.py
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.state import StatesGroup, State
@@ -20,7 +19,7 @@ class FolderStates(StatesGroup):
     waiting_folder_title = State()
 
 @router.message(F.text == "📚 Предметы")
-async def subjects_start(msg: Message):
+async def   subjects_start(msg: Message):
     await msg.answer("Выбери предмет:", reply_markup=subjects_kb(SUBJECTS))
 
 @router.callback_query(F.data == "sub:back")
@@ -101,7 +100,6 @@ async def folder_list(call: CallbackQuery):
 @router.callback_query(F.data.startswith("sf:listback:"))
 async def back_to_subject_menu(call: CallbackQuery):
     subject_id = int(call.data.split(":")[-1])
-    # получим название предмета из БД
     cur = await db.execute("SELECT name FROM subjects WHERE id=?", (subject_id,))
     row = await cur.fetchone()
     if row:
