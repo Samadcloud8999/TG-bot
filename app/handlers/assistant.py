@@ -3,18 +3,22 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
-from ..keyboards import assistant_levels_kb  # твоя клавиатура уровней
+from ..keyboards import assistant_levels_kb 
+from ..config import OPENAI_API_KEY
+import openai
+
+# configure API key
+if OPENAI_API_KEY:
+    openai.api_key = OPENAI_API_KEY
 
 router = Router()
 
 
-# ---------- FSM ----------
 class AssistantFlow(StatesGroup):
     topic = State()
     level = State()
 
 
-# ---------- Keyboards ----------
 def assistant_nav_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🆕 Новый вопрос", callback_data="ai:new")],
@@ -34,7 +38,6 @@ def after_answer_kb():
     ])
 
 
-# ---------- Text builder ----------
 def explain_template(topic: str, level: str) -> str:
     topic = topic.strip()
 
@@ -68,7 +71,6 @@ def explain_template(topic: str, level: str) -> str:
             f"• Реши задачу и объясни ход"
         )
 
-    # l2 по умолчанию
     return (
         f"✨ <b>Обычное объяснение</b>\n"
         f"📌 <b>Тема:</b> {topic}\n\n"
@@ -86,13 +88,12 @@ def explain_template(topic: str, level: str) -> str:
     )
 
 
-# ---------- Handlers ----------
-@router.message(F.text == "🤖 Ассистент")
+@router.message(F.text == "🤖 AI")
 async def assistant_start(msg: Message, state: FSMContext):
     await state.clear()
     await state.set_state(AssistantFlow.topic)
     await msg.answer(
-        "🤖 <b>Ассистент</b>\n\n"
+        "🤖 <b>AI‑помощник</b>\n\n"
         "Напиши тему/вопрос, который нужно объяснить.\n"
         "Пример: <i>“Что такое производная?”</i>",
         parse_mode="HTML",
@@ -122,7 +123,6 @@ async def assistant_level(cb: CallbackQuery, state: FSMContext):
 
     action = cb.data.split("ai:", 1)[1]
 
-    # навигация
     if action == "cancel":
         await state.clear()
         await cb.message.answer("Ок, отменил ✅")
@@ -152,14 +152,13 @@ async def assistant_level(cb: CallbackQuery, state: FSMContext):
         await cb.answer()
         return
 
-    # это уровень l1/l2/l3
     if action not in ("l1", "l2", "l3"):
         await cb.answer()
         return
 
     if not topic:
         await state.clear()
-        await cb.message.answer("Сначала нажми 🤖 Ассистент и напиши тему.")
+        await cb.message.answer("Сначала нажми 🤖 AI и напиши тему.")
         await cb.answer()
         return
 

@@ -8,7 +8,7 @@ def main_kb():
         keyboard=[
             [KeyboardButton(text="📚 Добавить тему"), KeyboardButton(text="🧠 Пройти повтор")],
             [KeyboardButton(text="🏆 Профиль"), KeyboardButton(text="⏰ Напоминания")],
-            [KeyboardButton(text="📚 Предметы"), KeyboardButton(text="🤖 Ассистент")],
+            [KeyboardButton(text="📚 Предметы"), KeyboardButton(text="🤖 AI")],
             [KeyboardButton(text="🖼 Галерея")],
             [KeyboardButton(text="🤝 Помощь друга")],
         ],

@@ -13,14 +13,12 @@ router = Router()
 XP_HELP_REPLY = 25
 
 
-# ---------- FSM ----------
 class HelpFlow(StatesGroup):
     topic = State()
     desc = State()
     respond_text = State()
 
 
-# ---------- Keyboards ----------
 def cancel_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✖️ Отмена", callback_data="help:cancel")]
@@ -118,7 +116,7 @@ async def help_got_desc(msg: Message, state: FSMContext):
     await msg.answer(
         "✅ Запрос создан!\n\n"
         "Теперь зайди в «Открытые запросы», чтобы увидеть его в списке.\n"
-        "Если за 1 час никто не ответит — поможет ассистент 🤖",
+        "Если за 1 час никто не ответит — поможет AI 🤖",
         reply_markup=help_menu_kb()
     )
 
