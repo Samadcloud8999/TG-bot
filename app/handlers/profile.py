@@ -11,10 +11,6 @@ class ProfileFlow(StatesGroup):
 
 
 def xp_for_next_level(level: int) -> int:
-    """
-    Примерная формула. Если у тебя другая логика уровней — скажи, подстрою.
-    """
-    # чем выше уровень — тем больше XP нужно
     return 100 + (level - 1) * 50
 
 
@@ -23,6 +19,22 @@ def safe_int(x, default=0) -> int:
         return int(x) if x is not None else default
     except (TypeError, ValueError):
         return default
+
+
+def progress_bar(pct: int, blocks: int = 12) -> str:
+    pct = max(0, min(100, pct))
+    filled = round((pct / 100) * blocks)
+    return "▰" * filled + "▱" * (blocks - filled)
+
+
+def make_profile_kb(has_password: bool) -> InlineKeyboardMarkup:
+    pwd_text = "🔒 Изменить пароль" if has_password else "🔑 Установить пароль"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔄 Обновить", callback_data="profile_refresh"),
+            InlineKeyboardButton(text=pwd_text, callback_data="profile_set_password"),
+        ]
+    ])
 
 
 @router.message(F.text == "🏆 Профиль")
@@ -43,35 +55,51 @@ async def profile(msg: Message):
     level = max(1, safe_int(row[1], 1))
     streak = safe_int(row[2], 0)
     help_given = safe_int(row[3], 0)
-    password = row[4] or ''
+    password = (row[4] or "").strip()
 
-    next_need = xp_for_next_level(level)
-    pct = min(100, int((xp / next_need) * 100)) if next_need > 0 else 0
+    next_need = max(1, xp_for_next_level(level))
+    pct = min(100, int((xp / next_need) * 100))
+    bar = progress_bar(pct, blocks=12)
 
-    blocks = 10
-    filled = int((pct / 100) * blocks)
-    bar = "█" * filled + "░" * (blocks - filled)
+    left = max(0, next_need - xp)
+    has_password = bool(password)
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 Обновить", callback_data="profile_refresh")],
-        [InlineKeyboardButton(text="🔑 Установить пароль", callback_data="profile_set_password")]
-    ])
+    name = (msg.from_user.full_name or "Пользователь").strip()
 
-    name = msg.from_user.full_name or "Пользователь"
-    pass_text = password if password else "<i>(не задан)</i>"
+    # Чтобы не палить пароль в чате — показываем статус (так безопаснее и выглядит лучше)
+    pass_status = "✅ задан" if has_password else "❌ не задан"
+
+    # небольшой “ранг” по уровню — чисто визуал (можешь убрать)
+    if level >= 20:
+        rank = "👑 Легенда"
+    elif level >= 10:
+        rank = "🦾 Профи"
+    elif level >= 5:
+        rank = "🚀 Опытный"
+    else:
+        rank = "🌱 Новичок"
 
     text = (
-        f"🏆 <b>Профиль</b>\n"
-        f"👤 <b>{name}</b>\n\n"
-        f"🎖 <b>Уровень:</b> {level}\n"
-        f"✨ <b>XP:</b> {xp} / {next_need}\n"
-        f"📈 <b>Прогресс:</b> {bar} <b>{pct}%</b>\n\n"
-        f"🔥 <b>Серия:</b> {streak} дн.\n"
-        f"🤝 <b>Помог другим:</b> {help_given} раз\n"
-        f"🔐 <b>Пароль:</b> {pass_text}"
+        "╔══════════════╗\n"
+        "🏆 <b>ТВОЙ ПРОФИЛЬ</b>\n"
+        "╚══════════════╝\n\n"
+        f"👤 <b>{name}</b>\n"
+        f"🏷 <b>Ранг:</b> {rank}\n\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        f"🎖 <b>Уровень:</b> <b>{level}</b>\n"
+        f"✨ <b>XP:</b> <code>{xp}</code> / <code>{next_need}</code>\n"
+        f"📊 <b>Прогресс:</b> {bar}  <b>{pct}%</b>\n"
+        f"➕ <b>До апа:</b> <code>{left}</code> XP\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        f"🔥 <b>Серия:</b> <b>{streak}</b> дн.\n"
+        f"🤝 <b>Помощь другим:</b> <b>{help_given}</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        f"🔐 <b>Пароль к галерее:</b> {pass_status}\n"
+        "\n"
+        "<i>Совет: жми «Обновить», чтобы увидеть свежие цифры.</i>"
     )
 
-    await msg.answer(text, parse_mode="HTML", reply_markup=kb)
+    await msg.answer(text, parse_mode="HTML", reply_markup=make_profile_kb(has_password))
 
 
 @router.callback_query(F.data == "profile_set_password")
@@ -79,7 +107,10 @@ async def profile_set_password(cb: CallbackQuery, state: FSMContext):
     await state.clear()
     await state.set_state(ProfileFlow.set_password)
     await cb.message.answer(
-        "🔑 Введи новый пароль. Другие люди смогут просмотреть твою галерею, если введут его.",
+        "🔑 Введи новый пароль.\n"
+        "<i>Его будут вводить другие люди, чтобы открыть твою галерею.</i>\n\n"
+        "⚠️ Не ставь пароль от почты/банка — придумай отдельный.",
+        parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✖️ Отмена", callback_data="profile_cancel")]
         ])
@@ -97,10 +128,18 @@ async def profile_cancel(cb: CallbackQuery, state: FSMContext):
 @router.message(ProfileFlow.set_password)
 async def profile_save_password(msg: Message, state: FSMContext):
     pwd = (msg.text or "").strip()
+
     if len(pwd) < 3:
-        await msg.answer("Пароль слишком короткий, минимум 3 символа.")
+        await msg.answer("Пароль слишком короткий — минимум 3 символа.")
         return
+
+    # чуть-чуть гигиены: ограничим длину, чтобы не ломать UI/БД
+    if len(pwd) > 64:
+        await msg.answer("Пароль слишком длинный — максимум 64 символа.")
+        return
+
     await db.db.execute("UPDATE users SET password=? WHERE tg_id=?", (pwd, msg.from_user.id))
     await db.db.commit()
     await state.clear()
-    await msg.answer("✅ Пароль сохранён.")
+
+    await msg.answer("✅ Пароль сохранён. Теперь доступ к галерее можно открыть по нему.")
