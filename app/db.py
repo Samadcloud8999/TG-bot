@@ -55,6 +55,13 @@ async def create_tables():
     except Exception:
         pass
 
+    # users.password (для доступа к галерее друзьям)
+    try:
+        await db.execute("ALTER TABLE users ADD COLUMN password TEXT")
+        await db.commit()
+    except Exception:
+        pass
+
     # --- Новые фичи: предметы/материалы ---
     await db.executescript("""
     CREATE TABLE IF NOT EXISTS user_subjects (
@@ -116,7 +123,6 @@ async def create_tables():
     """)
     await db.commit()
 
-    # --- Таблица предметов ---
     await db.execute("""
     CREATE TABLE IF NOT EXISTS subjects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,7 +135,19 @@ async def create_tables():
     """)
     await db.commit()
 
-    # --- Доп. таблицы: folders и материалы внутри папки ---
+    # таблица галереи
+    await db.execute("""
+    CREATE TABLE IF NOT EXISTS gallery (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tg_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        file_id TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(tg_id) REFERENCES users(tg_id)
+    )
+    """)
+    await db.commit()
+
     await db.execute("""
     CREATE TABLE IF NOT EXISTS folders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

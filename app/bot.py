@@ -2,9 +2,9 @@ import asyncio
 from aiogram import Bot, Dispatcher
 from .config import BOT_TOKEN
 from .db import init_db, create_tables
-from .handlers import start, topics, review, profile, reminders, subjects, help_friend, assistant
+from .handlers import start, topics, review, profile, reminders, subjects, help_friend, assistant, gallery
 from . import scheduler
-from .handlers import start, topics, review, profile, reminders, subjects, materials, help_friend, assistant
+from .handlers import start, topics, review, profile, reminders, subjects, materials, help_friend, assistant, gallery
 
 async def main():
     print("Запуск SmartStudy...")
@@ -30,6 +30,7 @@ async def main():
     dp.include_router(help_friend.router)
     dp.include_router(assistant.router)
     dp.include_router(materials.router)
+    dp.include_router(gallery.router)
 
     # запускаем планировщик (напоминания + авто-помощь)
     asyncio.create_task(scheduler.start(bot))

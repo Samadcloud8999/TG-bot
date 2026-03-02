@@ -9,6 +9,7 @@ def main_kb():
             [KeyboardButton(text="📚 Добавить тему"), KeyboardButton(text="🧠 Пройти повтор")],
             [KeyboardButton(text="🏆 Профиль"), KeyboardButton(text="⏰ Напоминания")],
             [KeyboardButton(text="📚 Предметы"), KeyboardButton(text="🤖 Ассистент")],
+            [KeyboardButton(text="🖼 Галерея")],
             [KeyboardButton(text="🤝 Помощь друга")],
         ],
         resize_keyboard=True
@@ -56,7 +57,6 @@ def folder_menu_kb(folder_id: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-# ---------- HELP FRIEND ----------
 def help_menu_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="➕ Создать запрос", callback_data="help:new")
@@ -66,8 +66,6 @@ def help_menu_kb() -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-# ---------- ASSISTANT ----------
-# Важно: в логах у тебя ждут ИМЕННО assistant_levels_kb
 def assistant_levels_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="1️⃣ Как ребёнку", callback_data="assist:level:1")
@@ -75,4 +73,26 @@ def assistant_levels_kb() -> InlineKeyboardMarkup:
     kb.button(text="3️⃣ Академ.", callback_data="assist:level:3")
     kb.button(text="⬅️ Назад", callback_data="assist:back")
     kb.adjust(1)
+    return kb.as_markup()
+# ---------- GALLERY ----------
+def gallery_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="➕ Добавить фото", callback_data="gallery:add")
+    kb.button(text="📁 Моя галерея", callback_data="gallery:my")
+    kb.button(text="👥 Галерея друга", callback_data="gallery:friend")
+    kb.button(text="⬅️ Назад", callback_data="gallery:back")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def gallery_list_kb(items: list[dict], owner_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for idx, it in enumerate(items, start=1):
+        title = it['title'] if len(it['title']) <= 32 else it['title'][:29] + "…"
+        kb.button(
+            text=f"{idx}. {title}",
+            callback_data=f"gallery:view:{it['id']}:{owner_id}"
+        )
+    kb.adjust(1)
+    kb.button(text="⬅️ Назад", callback_data=f"gallery:back")
     return kb.as_markup()
